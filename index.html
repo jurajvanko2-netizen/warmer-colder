@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Warmer Colder</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <img src="logo.png" alt="Warmer Colder" class="logo">
+    <p class="subtitle">See today’s weather compared to yesterday — so you know what to wear</p>
+  </header>
+
+  <main>
+    <form id="search-form" class="search" autocomplete="off">
+      <input type="text" id="query" placeholder="e.g., Bratislava, Prague, Vienna" aria-label="Location">
+      <button type="submit">Search</button>
+    </form>
+
+    <div id="status" role="status" aria-live="polite"></div>
+
+    <section id="results" class="hidden">
+      <h2 id="place"></h2>
+
+      <div class="table-wrap">
+        <div class="table">
+          <div class="thead">
+            <div class="th col-date">Date / Time</div>
+            <div class="th col-today">Today</div>
+            <div class="th col-yday">Yesterday</div>
+            <div class="th col-delta">Today vs. Yesterday</div>
+            <div class="th col-text">Real‑feel</div>
+          </div>
+          <div id="tbody"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <small>Data: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open‑Meteo</a> ·
+    Geocoding: <a href="https://geocoding-api.open-meteo.com" target="_blank" rel="noopener">Open‑Meteo Geocoding</a></small>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
