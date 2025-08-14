@@ -1,4 +1,4 @@
-// Warmer Colder v7 (regenerated): autosuggest, recent searches, colored deltas, 7-day hourly
+// Warmer Colder v7.1 fixes
 const form = document.getElementById('search-form');
 const input = document.getElementById('query');
 const statusEl = document.getElementById('status');
@@ -8,10 +8,10 @@ const tbody = document.getElementById('tbody');
 const suggestions = document.getElementById('suggestions');
 const recentBox = document.getElementById('recent');
 
-const RECENT_KEY = 'wc_recent_v1';
+const RECENT_KEY = 'wc_recent_v2'; // bump schema: store coords
 const MAX_RECENT = 10;
 
-// ------- Autosuggest -------
+// ------- Autosuggest (stores coords) -------
 let acAbort = null; let acTimer = null;
 input.addEventListener('input', () => {
   const q = input.value.trim();
@@ -32,7 +32,8 @@ async function fetchSuggestions(q){
     url.searchParams.set('language', 'en');
     const res = await fetch(url, { signal: acAbort.signal, headers: { 'accept': 'application/json' } });
     const data = await res.json();
-    renderSuggestions((data && data.results) ? data.results.slice(0,5) : []);
+    const list = (data && data.results) ? data.results.slice(0,5) : [];
+    renderSuggestions(list);
   }catch(e){ /* ignore */ }
 }
 function renderSuggestions(list){
@@ -41,12 +42,12 @@ function renderSuggestions(list){
   list.forEach(item => {
     const div = document.createElement('div');
     div.className = 'item';
-    const name = [item.name, item.admin1, item.country].filter(Boolean).join(', ');
-    div.innerHTML = `<span>${name}</span><span class="meta">${item.latitude.toFixed(2)}, ${item.longitude.toFixed(2)}</span>`;
+    const label = [item.name, item.admin1, item.country].filter(Boolean).join(', ');
+    div.innerHTML = `<span>${label}</span><span class="meta">${item.latitude.toFixed(2)}, ${item.longitude.toFixed(2)}</span>`;
     div.addEventListener('click', () => {
-      input.value = name;
       hideSuggestions();
-      form.requestSubmit();
+      // Use coordinates directly to avoid geocoding mismatch
+      searchByCoords(item.latitude, item.longitude, label);
     });
     suggestions.appendChild(div);
   });
@@ -54,18 +55,18 @@ function renderSuggestions(list){
 }
 function hideSuggestions(){ suggestions.classList.add('hidden'); }
 
-// ------- Recent searches -------
+// ------- Recent searches (store {name, lat, lon}) -------
 function loadRecent(){
   try{
     const j = localStorage.getItem(RECENT_KEY);
     return j ? JSON.parse(j) : [];
   }catch{ return []; }
 }
-function saveRecent(name){
+function saveRecent(entry){
   let arr = loadRecent();
-  const lower = name.toLowerCase();
-  arr = arr.filter(n => n.toLowerCase() !== lower);
-  arr.unshift(name);
+  // dedupe by name+coords
+  arr = arr.filter(e => !(e.name === entry.name && e.lat === entry.lat && e.lon === entry.lon));
+  arr.unshift(entry);
   if (arr.length > MAX_RECENT) arr = arr.slice(0, MAX_RECENT);
   localStorage.setItem(RECENT_KEY, JSON.stringify(arr));
   renderRecent();
@@ -74,31 +75,33 @@ function renderRecent(){
   const arr = loadRecent();
   recentBox.innerHTML = '';
   if (!arr.length){ recentBox.classList.add('hidden'); return; }
-  arr.forEach(name => {
+  arr.forEach(e => {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'chip';
-    chip.textContent = name;
+    chip.textContent = e.name;
     chip.addEventListener('click', () => {
-      input.value = name;
-      form.requestSubmit();
+      searchByCoords(e.lat, e.lon, e.name);
     });
     recentBox.appendChild(chip);
   });
   recentBox.classList.remove('hidden');
 }
 
-// ------- Search / Fetch / Render -------
+// ------- Search flows -------
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideSuggestions();
   const q = input.value.trim();
   if (!q) return;
+  await searchByQuery(q);
+});
+
+async function searchByQuery(q){
   results.classList.add('hidden');
   tbody.innerHTML='';
   statusEl.textContent='Looking up location…';
   try{
-    // Geocoding
     const geoUrl=new URL('https://geocoding-api.open-meteo.com/v1/search');
     geoUrl.searchParams.set('name', q);
     geoUrl.searchParams.set('count','1');
@@ -106,14 +109,23 @@ form.addEventListener('submit', async (e) => {
     const geo=await fetch(geoUrl,{headers:{'accept':'application/json'}}).then(r=>r.json());
     if(!geo.results || !geo.results.length){ statusEl.textContent='No matching location found.'; return; }
     const g=geo.results[0];
-    const {latitude, longitude, name, country, admin1}=g;
-    statusEl.textContent='Fetching hourly data…';
+    const label=[g.name,g.admin1,g.country].filter(Boolean).join(', ');
+    await searchByCoords(g.latitude, g.longitude, label);
+  }catch(err){
+    console.error(err);
+    statusEl.textContent='Oops, an error occurred.';
+  }
+}
 
-    // Forecast (hourly) + 24h ago, up to 7 forecast days
+async function searchByCoords(lat, lon, label){
+  results.classList.add('hidden');
+  tbody.innerHTML='';
+  statusEl.textContent='Fetching hourly data…';
+  try{
     const tz=Intl.DateTimeFormat().resolvedOptions().timeZone || 'auto';
     const fcUrl=new URL('https://api.open-meteo.com/v1/forecast');
-    fcUrl.searchParams.set('latitude',latitude);
-    fcUrl.searchParams.set('longitude',longitude);
+    fcUrl.searchParams.set('latitude',lat);
+    fcUrl.searchParams.set('longitude',lon);
     fcUrl.searchParams.set('timezone',tz);
     fcUrl.searchParams.set('past_days','1');
     fcUrl.searchParams.set('forecast_days','7');
@@ -128,11 +140,10 @@ form.addEventListener('submit', async (e) => {
     const mapTemp=new Map(), mapWind=new Map(), mapPrcp=new Map();
     for(let i=0;i<times.length;i++){ const k=toKey(times[i]); mapTemp.set(k,H.temperature_2m[i]); mapWind.set(k,H.windspeed_10m[i]); mapPrcp.set(k,H.precipitation[i]); }
 
-    // Start at next full hour
     const now=new Date();
     const start=new Date(now); start.setMinutes(0,0,0); if(now.getMinutes()>0 || now.getSeconds()>0 || now.getMilliseconds()>0){ start.setHours(start.getHours()+1); }
 
-    placeTitle.textContent=`${name}${admin1? ', '+admin1:''}${country? ', '+country:''}`;
+    placeTitle.textContent=label;
 
     let produced=0; let currentDateKey=null;
     const MAX_HOURS = 168;
@@ -166,8 +177,9 @@ form.addEventListener('submit', async (e) => {
       }
 
       const hourLabel=h.toLocaleTimeString('en-GB',{hour:'2-digit', minute:'2-digit'});
-      const tempClass = dT == null ? '' : (dT >= 0 ? 'hot' : 'cold');
-      const textComp = buildRealFeel(dT, dW);
+      const tempClass = dT == null ? 'temp-same' : (dT >= 0 ? 'temp-warmer' : 'temp-colder');
+      const windWordClass = dW == null ? '' : (dW >= 0 ? 'wind-more' : 'wind-less');
+      const textComp = buildRealFeel(dT, dW, tempClass, windWordClass);
 
       const row=document.createElement('div');
       row.className='row';
@@ -175,25 +187,33 @@ form.addEventListener('submit', async (e) => {
         <div class="td col-date"><div class="hour">${hourLabel}</div></div>
         <div class="td col-today">
           <div class="temp">${fmtTemp(tF)}</div>
-          <div class="small">Wind: ${rd(wF)} km/h <span class="badge">Precip: ${fx(pF)} mm</span></div>
+          <div class="small">Wind: ${rd(wF)} km/h  •  Precip: ${fx(pF)} mm</div>
         </div>
         <div class="td col-yday">
           <div class="temp">${fmtTemp(tY)}</div>
-          <div class="small">Wind: ${rd(wY)} km/h <span class="badge">Precip: ${fx(pY)} mm</span></div>
+          <div class="small">Wind: ${rd(wY)} km/h  •  Precip: ${fx(pY)} mm</div>
         </div>
         <div class="td col-delta">
-          <div class="delta ${tempClass}">${fmtDelta(dT)}</div>
-          <div class="delta-small">Wind: <span class="${clsPosNeg(dW)}">${diffStr(dW,' km/h')}</span>
-Precip: <span class="${clsPosNeg(dP)}">${diffStr(dP,' mm')}</span></div>
+          <div class="delta ${dT==null?'':(dT>=0?'hot':'cold')}">${fmtDelta(dT)}</div>
+          <div class="delta-small">
+            Wind: <span class="${windPosNegClass(dW)}">${diffStr(dW,' km/h')}</span>\n
+            Precip: <span class="${precipPosNegClass(dP)}">${diffStr(dP,' mm')}</span>
+          </div>
         </div>
-        <div class="td col-text"><span class="realfeel ${tempClass}">${textComp}</span></div>
+        <div class="td col-text">
+          <span class="realfeel">
+            <span class="${tempClass}">${tempText(dT)}</span>
+            ${windText(dW) ? ', ' : ''}
+            <span class="${windWordClass}">${windText(dW)}</span>
+          </span>
+        </div>
       `;
       tbody.appendChild(row);
       produced++;
     }
 
-    // Save recent and render
-    saveRecent(placeTitle.textContent);
+    // Save recent entry (with coords)
+    saveRecent({ name: label, lat, lon });
 
     results.classList.remove('hidden');
     statusEl.textContent='';
@@ -212,19 +232,18 @@ function fmtDelta(v){
 function fx(v){ return (v==null || Number.isNaN(v)) ? '—' : Number(v).toFixed(1); }
 function rd(v){ return (v==null || Number.isNaN(v)) ? '—' : Math.round(v); }
 function diffStr(v,suffix){ if (v==null || Number.isNaN(v)) return '—'; const s = v>0?'+':''; const val = (Math.round(v*10)/10).toFixed(1); return s + val + suffix; }
-function clsPosNeg(v){ if (v==null || Number.isNaN(v) || v===0) return ''; return v>0 ? 'pos' : 'neg'; }
-
-// Real‑feel builder
-function buildRealFeel(dT, dW){
-  const tText = tempText(dT);
-  const wText = windText(dW);
-  let parts = [];
-  if (tText) parts.push(tText);
-  if (wText) parts.push(wText);
-  return parts.join(', ');
+function windPosNegClass(v){
+  if (v==null || Number.isNaN(v) || v===0) return '';
+  // NEG (less wind) -> green; POS (more wind) -> red
+  return v>0 ? 'wind-pos' : 'wind-neg';
+}
+function precipPosNegClass(v){
+  if (v==null || Number.isNaN(v) || v===0) return '';
+  // precip: POS (more) -> green; NEG (less) -> red
+  return v>0 ? 'precip-pos' : 'precip-neg';
 }
 function tempText(dT){
-  if (dT==null || Number.isNaN(dT)) return '';
+  if (dT==null || Number.isNaN(dT)) return 'About the same';
   const th = 0.5;
   if (dT > th) return 'Warmer';
   if (dT < -th) return 'Colder';
@@ -232,7 +251,7 @@ function tempText(dT){
 }
 function windText(dW){
   if (dW==null || Number.isNaN(dW)) return '';
-  const x = dW; // km/h difference
+  const x = dW;
   if (x <= -18) return 'much less wind';
   if (x <= -8)  return 'less wind';
   if (x <= -2)  return 'slightly less wind';
