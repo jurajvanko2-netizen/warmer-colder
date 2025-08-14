@@ -1,19 +1,25 @@
-/* v6: 7-day hourly, padded logo, sticky headers */
+/* Warmer Colder v7 (regenerated) */
 *{box-sizing:border-box}
 :root{
   --bg:#f6f8fb; --card:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
-  --accent:#0ea5e9; --hot:#b91c1c; --cold:#1d4ed8; --thead-h:48px;
+  --accent:#0ea5e9; --hot:#b91c1c; --cold:#1d4ed8; --pos:#15803d; --neg:#b91c1c; --thead-h:48px;
 }
 body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif}
 header{padding:1.5rem 1rem 1rem;text-align:center;background:linear-gradient(180deg,#e6f3fb,transparent)}
 header .logo{max-width:520px;width:100%;height:auto;display:block;margin:0 auto}
 header .subtitle{margin:.5rem 0 0;color:var(--muted);font-size:1rem}
 main{max-width:1100px;margin:0 auto;padding:1rem}
-.search{display:flex;gap:.5rem;justify-content:center;margin:1rem 0 .6rem}
+.search{position:relative;display:flex;gap:.5rem;justify-content:center;margin:1rem 0 .4rem}
 .search input{flex:1;max-width:520px;padding:.8rem 1rem;border:1px solid var(--line);border-radius:.7rem;background:#fff;color:var(--ink);outline:none}
 .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(14,165,233,.16)}
 .search button{padding:.8rem 1rem;border:0;border-radius:.7rem;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+.suggestions{max-width:520px;margin:0 auto;background:#fff;border:1px solid var(--line);border-top:none;border-radius:0 0 .7rem .7rem;box-shadow:0 12px 24px rgba(2,6,23,.08);overflow:hidden}
+.suggestions .item{padding:.6rem .9rem;cursor:pointer;border-top:1px solid var(--line);display:flex;gap:.5rem;justify-content:space-between}
+.suggestions .item:hover{background:#f1f5f9}
+.suggestions .meta{color:var(--muted);font-size:.9rem}
 .hidden{display:none}
+#recent{max-width:820px;margin:.4rem auto .2rem;display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center}
+.chip{padding:.35rem .6rem;border:1px solid var(--line);border-radius:999px;background:#fff;color:#0f172a;cursor:pointer;font-size:.9rem}
 #status{min-height:1.25rem;text-align:center;color:var(--muted);margin:.4rem 0 0}
 #place{margin:.25rem 0 1rem;text-align:center}
 .table-wrap{background:var(--card);border:1px solid var(--line);border-radius:1rem;overflow:hidden;box-shadow:0 6px 16px rgba(2,6,23,.05);
@@ -31,7 +37,13 @@ main{max-width:1100px;margin:0 auto;padding:1rem}
 .delta.hot{color:var(--hot)}
 .delta.cold{color:var(--cold)}
 .delta-small{font-size:.88rem;color:var(--muted);margin-top:.2rem;white-space:pre-line}
-.badge{display:inline-block;border:1px solid var(--line);background:#fff;border-radius:.5rem;padding:.1rem .4rem;margin-left:.35rem;font-size:.85rem;color:var(--muted)}
+.delta-small .pos{color:var(--pos);font-weight:600}
+.delta-small .neg{color:var(--neg);font-weight:600}
+.badge{display:inline-block;border:1px solid var(--line);background:#fff;border-radius:.5rem;padding:.1rem .4rem;margin-left:.35rem;font-size:.85rem;color:#64748b}
+.realfeel{font-weight:700}
+.realfeel.hot{color:var(--hot)}
+.realfeel.cold{color:var(--cold)}
+.realfeel.same{color:var(--muted)}
 footer{padding:.6rem;text-align:center;color:#94a3b8;font-size:.8rem}
 footer a{color:#0369a1}
 @media (max-width:760px){
